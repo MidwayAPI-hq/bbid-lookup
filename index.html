@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>BBID Lookup — Barbados Building Identifier</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg-2: #f5f5f3;
+    --bg-3: #eeede9;
+    --text: #1a1a18;
+    --text-2: #5a5a56;
+    --text-3: #9a9a94;
+    --border: rgba(0,0,0,0.1);
+    --border-2: rgba(0,0,0,0.18);
+    --accent: #1a5fb4;
+    --accent-light: #e6f1fb;
+    --accent-text: #0c447c;
+    --highlight: #c64600;
+    --highlight-light: #faece7;
+    --highlight-text: #993c1d;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg-2: #252523;
+      --bg-3: #2e2e2b;
+      --text: #f0efea;
+      --text-2: #a8a8a0;
+      --text-3: #6a6a62;
+      --border: rgba(255,255,255,0.08);
+      --border-2: rgba(255,255,255,0.15);
+      --accent: #378add;
+      --accent-light: #042c53;
+      --accent-text: #85b7eb;
+      --highlight: #d85a30;
+      --highlight-light: #4a1b0c;
+      --highlight-text: #f0997b;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-2);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .app-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .app-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .app-header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+
+  .app-header p {
+    font-size: 14px;
+    color: var(--text-2);
+  }
+
+  .card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+  }
+
+  .card.search-card { overflow: visible; }
+
+  .card-body { padding: 1.25rem; }
+
+  .search-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 480px) {
+    .search-grid { grid-template-columns: 1fr; }
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+
+  .field-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  input, select {
+    background: var(--bg-2);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--text);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(55, 138, 221, 0.12);
+  }
+
+  input::placeholder { color: var(--text-3); }
+
+  .search-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 11px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    margin-top: 4px;
+    letter-spacing: 0.01em;
+  }
+
+  .search-btn:hover { opacity: 0.9; }
+  .search-btn:active { transform: scale(0.99); }
+  .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .results-bar {
+    padding: 10px 1.25rem;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-2);
+  }
+
+  .results-bar span { font-size: 13px; color: var(--text-2); }
+  .results-bar strong { color: var(--text); }
+
+  #map {
+    height: 280px;
+    width: 100%;
+    border-bottom: 0.5px solid var(--border);
+    z-index: 1;
+  }
+
+  @media (max-width: 480px) {
+    #map { height: 220px; }
+  }
+
+  .building-list {
+    max-height: 220px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .building-row {
+    padding: 10px 1.25rem;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .building-row:last-child { border-bottom: none; }
+  .building-row:hover { background: var(--bg-2); }
+  .building-row.active { background: var(--highlight-light); }
+
+  .bbid-pill {
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    background: var(--bg-2);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    color: var(--text);
+    min-width: 68px;
+    text-align: center;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+
+  .building-row.active .bbid-pill {
+    background: var(--highlight-light);
+    border-color: var(--highlight);
+    color: var(--highlight-text);
+  }
+
+  .building-info { flex: 1; min-width: 0; }
+
+  .building-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .building-sub {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 2px;
+  }
+
+  .type-tag {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: var(--accent-light);
+    color: var(--accent-text);
+    font-weight: 500;
+    margin-left: 6px;
+    white-space: nowrap;
+  }
+
+  .chevron {
+    color: var(--text-3);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .bbid-result {
+    padding: 1.25rem;
+  }
+
+  .result-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    gap: 12px;
+  }
+
+  .bbid-and-copy {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .result-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .bbid-display {
+    font-size: 32px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    color: var(--text);
+    letter-spacing: 0.08em;
+    line-height: 1;
+  }
+
+  .copy-btn {
+    background: var(--bg-2);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s, color 0.1s;
+    flex-shrink: 0;
+  }
+
+  .copy-btn:hover { background: var(--bg-3); color: var(--text); }
+  .copy-btn.copied { background: var(--accent-light); color: var(--accent-text); border-color: var(--accent); }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  @media (max-width: 400px) {
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+
+  .detail-item {
+    background: var(--bg-2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
+  .detail-item-label {
+    font-size: 11px;
+    color: var(--text-3);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .detail-item-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .state-panel {
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 14px;
+    display: none;
+  }
+
+  .state-panel.visible { display: block; }
+
+  .state-panel .icon {
+    font-size: 28px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .state-panel p { color: var(--text-2); margin-top: 6px; font-size: 13px; }
+
+  .empty-tips {
+    text-align: left;
+    margin: 1rem auto 0;
+    max-width: 380px;
+    background: var(--bg-2);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+  }
+
+  .empty-tips-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .empty-tip {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+
+  .empty-tip:last-child { margin-bottom: 0; }
+
+  .tip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-3);
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+
+  .empty-contact {
+    margin: 1rem auto 0;
+    max-width: 380px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.6;
+  }
+
+  .empty-contact a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 10px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .pagination-bar {
+    padding: 10px 1.25rem;
+    border-top: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    display: none;
+  }
+
+  .pagination-bar.visible { display: flex; }
+
+  .page-btn {
+    background: var(--bg-2);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .page-btn:hover:not(:disabled) { background: var(--bg-3); }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .page-info { font-size: 13px; color: var(--text-3); }
+
+  .powered-by {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 1.5rem;
+  }
+
+  .hidden { display: none !important; }
+
+  .typeahead-wrap { position: relative; }
+
+  .typeahead-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--bg);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 1000;
+    max-height: 260px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .typeahead-item {
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .typeahead-item:last-child { border-bottom: none; }
+  .typeahead-item:hover, .typeahead-item.active { background: var(--bg-2); }
+
+  .typeahead-parish {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .typeahead-loading {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--text-3);
+    text-align: center;
+  }
+
+  .reset-btn {
+    background: none;
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+
+  .reset-btn:hover { background: var(--bg-2); color: var(--text); }
+
+  .input-clear-wrap { position: relative; }
+
+  .input-clear-wrap input { padding-right: 28px; }
+
+  .clear-field-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background: var(--bg-3);
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 9px;
+    color: var(--text-2);
+    line-height: 1;
+    padding: 0;
+    transition: background 0.1s;
+    visibility: hidden;
+  }
+
+  .clear-field-btn:hover { background: var(--text-3); color: var(--bg); }
+  .clear-field-btn.visible { visibility: visible; }
+
+  .cap-warning {
+    padding: 7px 1.25rem;
+    background: var(--highlight-light);
+    border-bottom: 0.5px solid var(--border);
+    font-size: 12px;
+    color: var(--highlight-text);
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .cap-warning.visible { display: flex; }
+
+  .nomap-tag {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 100px;
+    background: var(--bg-3);
+    color: var(--text-3);
+    font-weight: 500;
+    margin-left: 6px;
+    white-space: nowrap;
+  }
+
+  .search-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-top: 4px;
+  }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow) !important;
+    font-family: inherit !important;
+  }
+
+  .map-tip {
+    font-size: 12px;
+    color: var(--text-3);
+    padding: 6px 1.25rem;
+    border-top: 0.5px solid var(--border);
+    background: var(--bg-2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .help-toggle {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0c447c;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .help-toggle { color: #85b7eb; }
+  }
+
+  .help-toggle:hover { text-decoration: underline; }
+
+  .help-panel {
+    border-top: 0.5px solid var(--border);
+    padding: 1rem 1.25rem;
+    background: var(--bg);
+  }
+</style>
+</head>
+<body>
+
+<div class="app-wrap">
+
+  <div class="app-header">
+    <h1>Find your building ID (BBID)</h1>
+    <p>Search by street name to locate your building and retrieve your Barbados Building Identifier</p>
+  </div>
+
+  <div class="card search-card">
+    <div class="card-body">
+      <div class="search-grid">
+        <div class="field-group">
+          <label class="field-label" for="input-road">Street / area name</label>
+          <div class="typeahead-wrap">
+            <div class="input-clear-wrap">
+              <input type="text" id="input-road" placeholder="e.g. Roebuck, Goodland..." autocomplete="off" autocorrect="off" spellcheck="false" maxlength="80">
+              <button class="clear-field-btn" id="clear-road" aria-label="Clear street field" tabindex="-1">✕</button>
+            </div>
+            <div class="typeahead-dropdown hidden" id="typeahead-dropdown"></div>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="input-parish">Parish</label>
+          <select id="input-parish">
+            <option value="">All parishes</option>
+          </select>
+        </div>
+      </div>
+      <div class="search-grid">
+        <div class="field-group">
+          <label class="field-label" for="input-postal">Postal code</label>
+          <div class="input-clear-wrap">
+            <input type="text" id="input-postal" placeholder="e.g. BB17128" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="10">
+            <button class="clear-field-btn" id="clear-postal" aria-label="Clear postal field" tabindex="-1">✕</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="input-bbid">BBID (exact building)</label>
+          <div class="input-clear-wrap">
+            <input type="text" id="input-bbid" placeholder="e.g. X83EW5" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="6" inputmode="text" autocapitalize="characters" style="font-family: 'SF Mono','Fira Code','Courier New',monospace; letter-spacing: 0.06em; text-transform: uppercase;">
+            <button class="clear-field-btn" id="clear-bbid" aria-label="Clear BBID field" tabindex="-1">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="field-group" style="margin-bottom: 12px;">
+        <label class="field-label" for="input-business">Business name (optional)</label>
+        <div class="typeahead-wrap">
+          <div class="input-clear-wrap">
+            <input type="text" id="input-business" placeholder="e.g. Chefette, Courts, Super Centre..." autocomplete="off" autocorrect="off" spellcheck="false" maxlength="80">
+            <button class="clear-field-btn" id="clear-business" aria-label="Clear business field" tabindex="-1">✕</button>
+          </div>
+          <div class="typeahead-dropdown hidden" id="biz-typeahead-dropdown"></div>
+        </div>
+      </div>
+      <div class="search-row">
+        <button class="search-btn" id="search-btn" onclick="doSearch()">Search buildings</button>
+        <button class="reset-btn" onclick="resetAll()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <div class="results-bar">
+      <span id="results-label">Results</span>
+      <strong id="results-count"></strong>
+    </div>
+
+    <div class="cap-warning hidden" id="cap-warning">
+      &#9888; Showing the first 2,000 results — try narrowing your search for complete coverage.
+    </div>
+
+    <div id="loading-state" class="state-panel">
+      <div class="spinner"></div>
+      <span>Searching buildings...</span>
+    </div>
+
+    <div id="empty-state" class="state-panel">
+      <span class="icon">&#9740;</span>
+      <span style="font-size: 15px; font-weight: 500; color: var(--text);">No buildings found</span>
+      <p>Your search didn't return any results. This is usually a data issue, not a problem with your address.</p>
+
+      <div class="empty-tips">
+        <div class="empty-tips-title">Try these</div>
+        <div class="empty-tip">
+          <span class="tip-dot"></span>
+          <span>Use a shorter version of your street name — try <strong>"Goodland"</strong> instead of <strong>"Goodland Land"</strong></span>
+        </div>
+        <div class="empty-tip">
+          <span class="tip-dot"></span>
+          <span>Try your <strong>postal code</strong> instead — type it in the postal code field (e.g. BB17128)</span>
+        </div>
+        <div class="empty-tip">
+          <span class="tip-dot"></span>
+          <span>Your street may be stored under a <strong>nearby road name</strong> or an older area name in the database</span>
+        </div>
+        <div class="empty-tip">
+          <span class="tip-dot"></span>
+          <span>Try searching by <strong>parish only</strong> — select your parish and leave the street blank</span>
+        </div>
+      </div>
+
+      <div class="empty-contact">
+        Still can't find your building?<br>
+        The Lands &amp; Surveys database may not have your property listed yet.<br>
+        Contact <a href="mailto:info@lsd.gov.bb" rel="noopener noreferrer">Lands &amp; Surveys</a> to register or verify your BBID.
+      </div>
+    </div>
+
+    <div id="map-wrap" class="hidden">
+      <div id="map"></div>
+      <div class="map-tip">
+        <span>Tap a building on the map or select from the list below</span>
+        <button class="help-toggle" id="help-toggle" onclick="toggleHelp()">Can&#39;t find yours? &#9432;</button>
+      </div>
+      <div class="help-panel hidden" id="help-panel">
+        <div class="empty-tips" style="max-width:100%;margin:0;">
+          <div class="empty-tips-title">Having trouble finding your building?</div>
+          <div class="empty-tip"><span class="tip-dot"></span><span>Use a shorter version of your street name — try <strong>"Goodland"</strong> instead of <strong>"Goodland Land"</strong></span></div>
+          <div class="empty-tip"><span class="tip-dot"></span><span>Try your <strong>postal code</strong> instead — type it in the postal code field (e.g. BB17128)</span></div>
+          <div class="empty-tip"><span class="tip-dot"></span><span>Your street may be stored under a <strong>nearby road name</strong> or an older area name in the database</span></div>
+          <div class="empty-tip"><span class="tip-dot"></span><span>Try searching by <strong>parish only</strong> — select your parish and leave the street blank</span></div>
+          <div class="empty-tip" style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);"><span class="tip-dot" style="background:var(--accent);"></span><span>Still stuck? Contact <a href="mailto:info@lsd.gov.bb" rel="noopener noreferrer" style="color:var(--accent);">Lands &amp; Surveys</a> — your property may not be listed in the database yet.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="building-list" id="building-list"></div>
+
+    <div class="pagination-bar" id="pagination-bar">
+      <button class="page-btn" id="prev-btn" onclick="changePage(-1)" disabled>&#8592; Previous</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="page-btn" id="next-btn" onclick="changePage(1)">Next &#8594;</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="detail-card">
+    <div class="bbid-result">
+      <div class="result-top">
+        <div class="bbid-and-copy">
+          <div>
+            <div class="result-label">Your building ID</div>
+            <div class="bbid-display" id="bbid-display">—</div>
+          </div>
+          <button class="copy-btn" id="copy-btn" onclick="copyBBID()">Copy</button>
+        </div>
+        <button class="copy-btn" id="copy-all-btn" onclick="copyAll()">Copy all</button>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="detail-item-label">Near road</div>
+          <div class="detail-item-value" id="detail-road">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">Location</div>
+          <div class="detail-item-value" id="detail-location">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">Parish</div>
+          <div class="detail-item-value" id="detail-parish">—</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-label">Postal code</div>
+          <div class="detail-item-value" id="detail-postal">—</div>
+        </div>
+        <div class="detail-item" id="detail-type-wrap" class="hidden">
+          <div class="detail-item-label">Build type</div>
+          <div class="detail-item-value" id="detail-type">—</div>
+        </div>
+        <div class="detail-item" id="detail-business-wrap" class="hidden">
+          <div class="detail-item-label">Business</div>
+          <div class="detail-item-value" id="detail-business">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="powered-by">Data provided by the Lands &amp; Surveys Department, Barbados</p>
+</div>
+
+<script>
+const API = 'https://services7.arcgis.com/GaT8GzOa0Kqi9sL7/arcgis/rest/services/2019SimplifiedBuildings/FeatureServer/0/query';
+const PAGE_SIZE = 50;
+
+// Safe HTML escaper — used for all API-returned values rendered into innerHTML
+// Handles null/undefined gracefully — returns empty string
+function escapeHTML(val) {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Input sanitiser — strips characters that have no place in a building search
+// Only applied to text inputs before building SQL clause
+// Does NOT touch the parish select — that value comes from the API itself
+// Keeps: letters, digits, spaces, dots, hyphens, apostrophes, commas
+function sanitiseInput(val) {
+  if (!val) return '';
+  return String(val).replace(/[^a-zA-Z0-9 .,'\-#]/g, '').trim();
+}
+
+let map = null;
+let mapInit = false;
+let allFeatures = [];
+let currentPage = 0;
+let selectedBBID = null;
+let layerGroup = null;
+let selectedLayer = null;
+
+const STYLE_DEFAULT = { color: '#1a5fb4', weight: 1.5, fillColor: '#378add', fillOpacity: 0.45 };
+const STYLE_HOVER   = { color: '#1a5fb4', weight: 2,   fillColor: '#378add', fillOpacity: 0.7 };
+const STYLE_ACTIVE  = { color: '#c64600', weight: 2.5, fillColor: '#d85a30', fillOpacity: 0.85 };
+
+function toggleHelp() {
+  const panel = document.getElementById('help-panel');
+  const btn = document.getElementById('help-toggle');
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  btn.textContent = isHidden ? 'Close ✕' : 'Can\'t find yours? ℹ';
+}
+
+let typeaheadTimer = null;
+let typeaheadActive = false;
+let exactRoadMatch = null; // set when user picks from typeahead
+
+function initTypeahead() {
+  const input = document.getElementById('input-road');
+  const dropdown = document.getElementById('typeahead-dropdown');
+
+  input.addEventListener('input', () => {
+    clearTimeout(typeaheadTimer);
+    exactRoadMatch = null; // user is typing freely — clear any exact match
+    const val = input.value.trim();
+    if (val.length < 3) { closeTypeahead(); return; }
+    typeaheadTimer = setTimeout(() => fetchSuggestions(val), 350);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeTypeahead(); return; }
+    if (e.key === 'Enter') {
+      const active = dropdown.querySelector('.typeahead-item.active');
+      if (active) { active.click(); e.preventDefault(); return; }
+      closeTypeahead();
+      doSearch();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = dropdown.querySelectorAll('.typeahead-item');
+      if (!items.length) return;
+      let idx = Array.from(items).findIndex(i => i.classList.contains('active'));
+      items.forEach(i => i.classList.remove('active'));
+      idx = e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+      if (idx < 0) idx = 0;
+      items[idx].classList.add('active');
+      items[idx].scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.closest('.typeahead-wrap').contains(e.target)) closeTypeahead();
+  });
+}
+
+async function fetchSuggestions(term) {
+  const dropdown = document.getElementById('typeahead-dropdown');
+  dropdown.innerHTML = '<div class="typeahead-loading">Searching…</div>';
+  dropdown.classList.remove('hidden');
+
+  const clean = sanitiseInput(term);
+  if (!clean) { closeTypeahead(); return; }
+  const safe = clean.replace(/'/g, "''");
+  // Starts-with match on NearRoad only — avoids noisy Location field matches
+  const where = `NearRoad LIKE '${safe}%'`;
+  try {
+    const p = new URLSearchParams({
+      where,
+      outFields: 'NearRoad,ParishName',
+      returnGeometry: 'false',
+      returnDistinctValues: 'false',
+      resultRecordCount: '2000', // fetch enough to cover all parishes
+      f: 'json'
+    });
+    const r = await fetch(`${API}?${p}`);
+    const d = await r.json();
+    if (!d.features || !d.features.length) {
+      dropdown.innerHTML = '<div class="typeahead-loading">No matches found</div>';
+      return;
+    }
+
+    // Build unique road+parish combinations
+    const seen = new Map();
+    d.features.forEach(f => {
+      const road = (f.attributes.NearRoad || '').trim();
+      const parish = (f.attributes.ParishName || '').trim();
+      if (!road || !parish) return;
+      const key = road + '||' + parish;
+      if (!seen.has(key)) seen.set(key, { label: road, parish });
+    });
+
+    // Sort: primary by road name, secondary by parish
+    const items = Array.from(seen.values())
+      .sort((a, b) => a.label.localeCompare(b.label) || a.parish.localeCompare(b.parish))
+      .slice(0, 15);
+
+    dropdown.innerHTML = '';
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'typeahead-item';
+      div.innerHTML = `<span>${escapeHTML(item.label)}</span><span class="typeahead-parish">${escapeHTML(item.parish)}</span>`;
+      div.addEventListener('mousedown', e => {
+        e.preventDefault();
+        document.getElementById('input-road').value = item.label;
+        // Store exact match flag so search uses = not LIKE
+        exactRoadMatch = item.label;
+        // Clear BBID — address selection takes priority
+        document.getElementById('input-bbid').value = '';
+        // Auto-select parish
+        const sel = document.getElementById('input-parish');
+        for (let o of sel.options) {
+          if (o.value === item.parish) { sel.value = item.parish; break; }
+        }
+        closeTypeahead();
+        doSearch();
+      });
+      dropdown.appendChild(div);
+    });
+  } catch(e) {
+    dropdown.innerHTML = '<div class="typeahead-loading">Could not load suggestions</div>';
+  }
+}
+
+function closeTypeahead() {
+  const d = document.getElementById('typeahead-dropdown');
+  if (d) d.classList.add('hidden');
+}
+
+function closeBizTypeahead() {
+  const d = document.getElementById('biz-typeahead-dropdown');
+  if (d) d.classList.add('hidden');
+}
+
+function initBizTypeahead() {
+  const input = document.getElementById('input-business');
+  const dropdown = document.getElementById('biz-typeahead-dropdown');
+  let bizTimer = null;
+
+  input.addEventListener('input', () => {
+    clearTimeout(bizTimer);
+    const val = input.value.trim();
+    if (val.length < 3) { closeBizTypeahead(); return; }
+    bizTimer = setTimeout(() => fetchBizSuggestions(val), 350);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeBizTypeahead(); return; }
+    if (e.key === 'Enter') {
+      const active = dropdown.querySelector('.typeahead-item.active');
+      if (active) { active.click(); e.preventDefault(); return; }
+      closeBizTypeahead();
+      doSearch();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = dropdown.querySelectorAll('.typeahead-item');
+      if (!items.length) return;
+      let idx = Array.from(items).findIndex(i => i.classList.contains('active'));
+      items.forEach(i => i.classList.remove('active'));
+      idx = e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+      if (idx < 0) idx = 0;
+      items[idx].classList.add('active');
+      items[idx].scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.closest('.typeahead-wrap').contains(e.target)) closeBizTypeahead();
+  });
+}
+
+async function fetchBizSuggestions(term) {
+  const dropdown = document.getElementById('biz-typeahead-dropdown');
+  dropdown.innerHTML = '<div class="typeahead-loading">Searching…</div>';
+  dropdown.classList.remove('hidden');
+
+  const clean = sanitiseInput(term);
+  if (!clean) { closeBizTypeahead(); return; }
+  const safe = clean.replace(/'/g, "''");
+  const where = `business_n LIKE '${safe}%'`;
+  try {
+    const p = new URLSearchParams({
+      where,
+      outFields: 'business_n,ParishName',
+      returnGeometry: 'false',
+      returnDistinctValues: 'false',
+      resultRecordCount: '2000',
+      f: 'json'
+    });
+    const r = await fetch(`${API}?${p}`);
+    const d = await r.json();
+    if (!d.features || !d.features.length) {
+      dropdown.innerHTML = '<div class="typeahead-loading">No matches found</div>';
+      return;
+    }
+
+    // Deduplicate by business name
+    const seen = new Map();
+    d.features.forEach(f => {
+      const biz = (f.attributes.business_n || '').trim();
+      const parish = (f.attributes.ParishName || '').trim();
+      if (!biz) return;
+      if (!seen.has(biz)) seen.set(biz, parish);
+    });
+
+    const items = Array.from(seen.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(0, 15);
+
+    dropdown.innerHTML = '';
+    items.forEach(([label, parish]) => {
+      const div = document.createElement('div');
+      div.className = 'typeahead-item';
+      div.innerHTML = `<span>${escapeHTML(label)}</span><span class="typeahead-parish">${escapeHTML(parish)}</span>`;
+      div.addEventListener('mousedown', e => {
+        e.preventDefault();
+        document.getElementById('input-business').value = label;
+        updateClearBtn('input-business', 'clear-business');
+        closeBizTypeahead();
+        doSearch();
+      });
+      dropdown.appendChild(div);
+    });
+  } catch(e) {
+    dropdown.innerHTML = '<div class="typeahead-loading">Could not load suggestions</div>';
+  }
+}
+
+function resetAll() {
+  document.getElementById('input-road').value = '';
+  document.getElementById('input-parish').value = '';
+  document.getElementById('input-postal').value = '';
+  document.getElementById('input-bbid').value = '';
+  document.getElementById('input-business').value = '';
+  document.getElementById('results-card').classList.add('hidden');
+  document.getElementById('detail-card').classList.add('hidden');
+  closeTypeahead();
+  closeBizTypeahead();
+  allFeatures = [];
+  currentPage = 0;
+  selectedBBID = null;
+  if (map && layerGroup) layerGroup.clearLayers();
+  exactRoadMatch = null;
+  // Hide all clear buttons
+  ['clear-road','clear-postal','clear-bbid','clear-business'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.remove('visible');
+  });
+  document.getElementById('input-road').focus();
+}
+
+async function loadParishes() {
+  try {
+    const p = new URLSearchParams({ where: '1=1', outFields: 'ParishName', returnGeometry: 'false', returnDistinctValues: 'true', orderByFields: 'ParishName', f: 'json' });
+    const r = await fetch(`${API}?${p}`);
+    const d = await r.json();
+    const sel = document.getElementById('input-parish');
+    if (d.features) {
+      d.features.forEach(f => {
+        const name = f.attributes.ParishName;
+        if (name && name.trim() !== '') {
+          const o = document.createElement('option');
+          o.value = name.trim();
+          o.textContent = name.trim();
+          sel.appendChild(o);
+        }
+      });
+    }
+  } catch(e) { console.warn('Could not load parishes', e); }
+}
+
+function buildWhere() {
+  const road = sanitiseInput(document.getElementById('input-road').value.trim());
+  const parish = document.getElementById('input-parish').value;
+  const biz = sanitiseInput(document.getElementById('input-business').value.trim());
+  const postal = sanitiseInput(document.getElementById('input-postal').value.trim());
+  const bbidRaw = document.getElementById('input-bbid').value.trim().toUpperCase();
+  const bbid = sanitiseInput(bbidRaw);
+  const parts = [];
+
+  // BBID is exact match — if provided, use it alone for precision
+  if (bbid) return `BuildingID='${bbid.replace(/'/g,"''")}'`;
+
+  // If user selected from typeahead use exact match; otherwise broad LIKE search
+  if (road) {
+    const r = road.replace(/'/g,"''");
+    if (exactRoadMatch && exactRoadMatch === road) {
+      parts.push(`(NearRoad='${r}' OR Location='${r}')`);
+    } else {
+      parts.push(`(NearRoad LIKE '%${r}%' OR Location LIKE '%${r}%')`);
+    }
+  }
+  if (parish) parts.push(`ParishName='${parish.replace(/'/g,"''")}'`);
+  if (postal) parts.push(`ShortPosta LIKE '%${postal.replace(/'/g,"''")}%'`);
+  if (biz) parts.push(`business_n LIKE '%${biz.replace(/'/g,"''")}%'`);
+  return parts.length ? parts.join(' AND ') : '1=1';
+}
+
+async function doSearch() {
+  const road = sanitiseInput(document.getElementById('input-road').value.trim());
+  const parish = document.getElementById('input-parish').value;
+  const biz = sanitiseInput(document.getElementById('input-business').value.trim());
+  const postal = sanitiseInput(document.getElementById('input-postal').value.trim());
+  const bbid = sanitiseInput(document.getElementById('input-bbid').value.trim());
+
+  // Need at least one field filled
+  if (!road && !parish && !biz && !postal && !bbid) {
+    document.getElementById('input-road').focus();
+    return;
+  }
+  currentPage = 0;
+  allFeatures = [];
+  selectedBBID = null;
+  document.getElementById('detail-card').classList.add('hidden');
+  document.getElementById('search-btn').disabled = true;
+  document.getElementById('search-btn').textContent = 'Searching…';
+  showResults();
+  setState('loading');
+  await fetchAll();
+}
+
+async function fetchAll() {
+  const where = buildWhere();
+  let offset = 0;
+  let fetched = [];
+  try {
+    while (true) {
+      const p = new URLSearchParams({ where, outFields: 'BuildingID,NearRoad,Location,ParishName,ShortPosta,LongPostal,BuildType,business_n', returnGeometry: 'true', outSR: '4326', resultRecordCount: '2000', resultOffset: String(offset), f: 'json' });
+      const r = await fetch(`${API}?${p}`);
+      const d = await r.json();
+      if (!d.features || d.features.length === 0) break;
+      fetched = fetched.concat(d.features);
+      if (d.features.length < 2000) break;
+      offset += 2000;
+    }
+    allFeatures = fetched;
+    document.getElementById('search-btn').disabled = false;
+    document.getElementById('search-btn').textContent = 'Search buildings';
+    if (allFeatures.length === 0) { setState('empty'); return; }
+    setState('results');
+    renderPage(0);
+  } catch(e) {
+    console.error(e);
+    document.getElementById('search-btn').disabled = false;
+    document.getElementById('search-btn').textContent = 'Search buildings';
+    setState('empty');
+  }
+}
+
+function showResults() {
+  document.getElementById('results-card').classList.remove('hidden');
+}
+
+function setState(s) {
+  const loadingEl = document.getElementById('loading-state');
+  const emptyEl = document.getElementById('empty-state');
+  loadingEl.classList.remove('visible');
+  loadingEl.style.display = '';
+  emptyEl.classList.remove('visible');
+  emptyEl.style.display = 'none';
+  document.getElementById('map-wrap').classList.add('hidden');
+  document.getElementById('building-list').innerHTML = '';
+  document.getElementById('pagination-bar').classList.remove('visible');
+  document.getElementById('cap-warning').classList.remove('visible');
+  document.getElementById('cap-warning').classList.add('hidden');
+  if (s === 'loading') {
+    loadingEl.classList.add('visible');
+    loadingEl.style.display = '';
+  } else if (s === 'empty') {
+    emptyEl.classList.add('visible');
+    emptyEl.style.display = '';
+  }
+}
+
+function renderPage(page, skipMapRender) {
+  currentPage = page;
+  const total = allFeatures.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start = page * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
+  const pageFeatures = allFeatures.slice(start, end);
+
+  const road = sanitiseInput(document.getElementById('input-road').value.trim());
+  const parish = document.getElementById('input-parish').value;
+  const postal = sanitiseInput(document.getElementById('input-postal').value.trim());
+  const bbid = sanitiseInput(document.getElementById('input-bbid').value.trim().toUpperCase());
+  const biz = sanitiseInput(document.getElementById('input-business').value.trim());
+  let labelParts = [];
+  if (bbid) labelParts.push(`BBID "${bbid}"`);
+  else {
+    if (road) labelParts.push(`"${road}"`);
+    if (biz) labelParts.push(`"${biz}"`);
+    if (postal) labelParts.push(postal);
+    if (parish) labelParts.push(parish);
+  }
+  document.getElementById('results-label').textContent = labelParts.length ? `Results for ${labelParts.join(', ')}` : 'All results';
+
+  // Count distinct parishes across all results
+  const parishes = new Set(allFeatures.map(f => f.attributes.ParishName).filter(Boolean));
+  const parishCount = parishes.size;
+  const countText = `${total.toLocaleString()} building${total !== 1 ? 's' : ''}${parishCount > 1 ? ` across ${parishCount} parishes` : ''}`;
+  document.getElementById('results-count').textContent = countText;
+
+  // Show cap warning if exactly 2000 results returned (may be truncated)
+  const capEl = document.getElementById('cap-warning');
+  if (total >= 2000) {
+    capEl.classList.remove('hidden');
+    capEl.classList.add('visible');
+  } else {
+    capEl.classList.remove('visible');
+    capEl.classList.add('hidden');
+  }
+
+  document.getElementById('map-wrap').classList.remove('hidden');
+  initMap();
+
+  // Only render ALL features on map on first load — skip on page changes to preserve map state
+  if (!skipMapRender) renderMapFeatures(allFeatures);
+
+  renderList(pageFeatures);
+
+  if (totalPages > 1) {
+    document.getElementById('pagination-bar').classList.add('visible');
+    document.getElementById('page-info').textContent = `Page ${page + 1} of ${totalPages}`;
+    document.getElementById('prev-btn').disabled = page === 0;
+    document.getElementById('next-btn').disabled = page >= totalPages - 1;
+  }
+}
+
+function initMap() {
+  if (mapInit) return;
+  mapInit = true;
+  map = L.map('map', { zoomControl: true, attributionControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(map);
+  layerGroup = L.featureGroup().addTo(map);
+}
+
+function renderMapFeatures(features) {
+  layerGroup.clearLayers();
+  selectedLayer = null;
+  const validFeatures = features.filter(f => f.geometry && f.geometry.rings);
+  validFeatures.forEach(f => {
+    const coords = f.geometry.rings[0].map(c => [c[1], c[0]]);
+    const poly = L.polygon(coords, STYLE_DEFAULT);
+    poly.featureData = f.attributes;
+    poly.on('mouseover', function() { if (this.featureData.BuildingID !== selectedBBID) this.setStyle(STYLE_HOVER); });
+    poly.on('mouseout', function() { if (this.featureData.BuildingID !== selectedBBID) this.setStyle(STYLE_DEFAULT); });
+    poly.on('click', function() { selectBuilding(this.featureData, this); });
+    layerGroup.addLayer(poly);
+  });
+  if (validFeatures.length > 0) {
+    try { map.fitBounds(layerGroup.getBounds(), { padding: [20, 20], maxZoom: 17 }); } catch(e) {}
+  }
+}
+
+function renderList(features) {
+  const list = document.getElementById('building-list');
+  list.innerHTML = '';
+  features.forEach(f => {
+    const a = f.attributes;
+    const hasGeometry = !!(f.geometry && f.geometry.rings && f.geometry.rings.length);
+    const row = document.createElement('div');
+    row.className = 'building-row' + (a.BuildingID === selectedBBID ? ' active' : '');
+    row.dataset.bbid = a.BuildingID;
+    const tag = a.BuildType ? `<span class="type-tag">${escapeHTML(a.BuildType)}</span>` : '';
+    const noMapTag = !hasGeometry ? `<span class="nomap-tag">No map data</span>` : '';
+    // Primary name: business name if present, otherwise location/road
+    const primaryName = escapeHTML(a.business_n || a.Location || a.NearRoad || 'Unknown location');
+    // Sub line: always show parish and postal, plus location/road if business name is primary
+    const locationSub = a.business_n ? ` · ${escapeHTML(a.Location || a.NearRoad || '')}`.replace(/ · $/, '') : '';
+    row.innerHTML = `
+      <span class="bbid-pill">${escapeHTML(a.BuildingID) || '—'}</span>
+      <div class="building-info">
+        <div class="building-name">${primaryName}${tag}${noMapTag}</div>
+        <div class="building-sub">${escapeHTML(a.ParishName) || ''} &middot; ${escapeHTML(a.ShortPosta) || ''}${locationSub}</div>
+      </div>
+      <span class="chevron">›</span>`;
+    row.addEventListener('click', () => {
+      const layer = findLayerByBBID(a.BuildingID);
+      selectBuilding(a, layer);
+      if (layer) { try { map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 19 }); } catch(e) {} }
+    });
+    list.appendChild(row);
+  });
+}
+
+function findLayerByBBID(bbid) {
+  let found = null;
+  layerGroup.eachLayer(l => { if (l.featureData && l.featureData.BuildingID === bbid) found = l; });
+  return found;
+}
+
+function selectBuilding(attrs, layer) {
+  selectedBBID = attrs.BuildingID;
+  if (selectedLayer) selectedLayer.setStyle(STYLE_DEFAULT);
+  if (layer) { layer.setStyle(STYLE_ACTIVE); layer.bringToFront(); selectedLayer = layer; }
+
+  const idx = allFeatures.findIndex(f => f.attributes.BuildingID === selectedBBID);
+  if (idx !== -1) {
+    const targetPage = Math.floor(idx / PAGE_SIZE);
+    if (targetPage !== currentPage) {
+      renderPage(targetPage, true);
+    }
+  }
+
+  document.querySelectorAll('.building-row').forEach(r => {
+    r.classList.toggle('active', r.dataset.bbid === selectedBBID);
+  });
+  const activeRow = document.querySelector(`.building-row[data-bbid="${selectedBBID}"]`);
+  if (activeRow) activeRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  showDetail(attrs);
+}
+
+function showDetail(a) {
+  document.getElementById('bbid-display').textContent = a.BuildingID || '—';
+  document.getElementById('detail-road').textContent = a.NearRoad || '—';
+  document.getElementById('detail-location').textContent = a.Location || '—';
+  document.getElementById('detail-parish').textContent = a.ParishName || '—';
+  document.getElementById('detail-postal').textContent = a.LongPostal || a.ShortPosta || '—';
+
+  const typeWrap = document.getElementById('detail-type-wrap');
+  if (a.BuildType) {
+    document.getElementById('detail-type').textContent = a.BuildType;
+    typeWrap.classList.remove('hidden');
+  } else { typeWrap.classList.add('hidden'); }
+
+  const bizWrap = document.getElementById('detail-business-wrap');
+  if (a.business_n) {
+    document.getElementById('detail-business').textContent = a.business_n;
+    bizWrap.classList.remove('hidden');
+  } else { bizWrap.classList.add('hidden'); }
+
+  const detailCard = document.getElementById('detail-card');
+  detailCard.classList.remove('hidden');
+  detailCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  document.getElementById('copy-btn').textContent = 'Copy';
+  document.getElementById('copy-btn').classList.remove('copied');
+  document.getElementById('copy-all-btn').textContent = 'Copy all';
+  document.getElementById('copy-all-btn').classList.remove('copied');
+}
+
+function copyAll() {
+  const bbid = document.getElementById('bbid-display').textContent;
+  if (!bbid || bbid === '—') return;
+
+  const road = document.getElementById('detail-road').textContent;
+  const location = document.getElementById('detail-location').textContent;
+  const parish = document.getElementById('detail-parish').textContent;
+  const postal = document.getElementById('detail-postal').textContent;
+
+  // Build address line — only include location if it differs from road and isn't blank/dash
+  const addrParts = [road !== '—' ? road : null, (location !== '—' && location !== road) ? location : null].filter(Boolean);
+  const lines = [
+    bbid,
+    addrParts.length ? addrParts.join(', ') : null,
+    [parish !== '—' ? parish : null, postal !== '—' ? postal : null].filter(Boolean).join(' · ') || null
+  ].filter(Boolean).join('\n');
+
+  const btn = document.getElementById('copy-all-btn');
+  navigator.clipboard.writeText(lines).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy all'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = lines; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy all'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyBBID() {
+  const bbid = document.getElementById('bbid-display').textContent;
+  if (!bbid || bbid === '—') return;
+  navigator.clipboard.writeText(bbid).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = bbid; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function changePage(dir) {
+  const newPage = currentPage + dir;
+  const totalPages = Math.ceil(allFeatures.length / PAGE_SIZE);
+  if (newPage < 0 || newPage >= totalPages) return;
+  renderPage(newPage, true);
+  document.getElementById('results-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('input-road').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.getElementById('input-business').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.getElementById('input-postal').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.getElementById('input-bbid').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// When BBID is typed into, clear street/parish/postal so they don't conflict
+document.getElementById('input-bbid').addEventListener('input', () => {
+  const bbid = document.getElementById('input-bbid').value.trim();
+  if (bbid.length > 0) {
+    document.getElementById('input-road').value = '';
+    document.getElementById('input-parish').value = '';
+    document.getElementById('input-postal').value = '';
+    document.getElementById('input-business').value = '';
+    exactRoadMatch = null;
+    closeTypeahead();
+    closeBizTypeahead();
+    // Update clear buttons for cleared fields
+    ['input-road','input-postal','input-business'].forEach(id => {
+      const btn = document.getElementById('clear-' + id.replace('input-',''));
+      if (btn) btn.classList.remove('visible');
+    });
+  }
+  updateClearBtn('input-bbid', 'clear-bbid');
+});
+
+// --- Clear button helpers ---
+function updateClearBtn(inputId, btnId) {
+  const val = document.getElementById(inputId).value;
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.toggle('visible', val.length > 0);
+}
+
+function initClearButtons() {
+  const pairs = [
+    ['input-road', 'clear-road'],
+    ['input-postal', 'clear-postal'],
+    ['input-bbid', 'clear-bbid'],
+    ['input-business', 'clear-business']
+  ];
+  pairs.forEach(([inputId, btnId]) => {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    if (!input || !btn) return;
+    input.addEventListener('input', () => updateClearBtn(inputId, btnId));
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      input.value = '';
+      btn.classList.remove('visible');
+      // If road cleared, also clear exact match flag and close typeahead
+      if (inputId === 'input-road') {
+        exactRoadMatch = null;
+        closeTypeahead();
+      }
+      if (inputId === 'input-business') {
+        closeBizTypeahead();
+      }
+      input.focus();
+    });
+  });
+}
+
+loadParishes();
+initTypeahead();
+initBizTypeahead();
+initClearButtons();
+</script>
+</body>
+</html>
